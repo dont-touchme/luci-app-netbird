@@ -23,11 +23,13 @@ LUCI_DESCRIPTION:=LuCI web interface to manage the NetBird mesh-VPN client \
 LUCI_DEPENDS:=
 LUCI_EXTRA_DEPENDS:=netbird (>=0), rpcd (>=0), rpcd-mod-ucode (>=0), luci-base (>=0)
 LUCI_PKGARCH:=all
+LUCI_URL:=https://github.com/dont-touchme/luci-app-netbird
+LUCI_MAINTAINER:=PC27149 <foxhis11@gmail.com>
 
 PKG_NAME:=luci-app-netbird
 PKG_VERSION:=0.1.0
-PKG_RELEASE:=3
-PKG_MAINTAINER:=pc27149 <foxhis11@gmail.com>
+PKG_RELEASE:=4
+PKG_MAINTAINER:=PC27149 <foxhis11@gmail.com>
 PKG_LICENSE:=Apache-2.0
 PKG_LICENSE_FILES:=LICENSE
 
