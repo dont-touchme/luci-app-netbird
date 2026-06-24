@@ -10,7 +10,7 @@ service through UCI and a ucode RPC backend.
 |---|---|---|
 | Frontend (views) | `htdocs/luci-static/resources/view/netbird/*.js` | 6 tabs: overview / versions / settings / status / setup(network) / logs. All DOM via `E()` (no innerHTML). |
 | Frontend helpers | `.../netbird/dom-helpers.js`, `netbird.css` | `pair / code / statusPill` builders. |
-| Backend entry | `root/usr/share/rpcd/ucode/netbird.uc` | The `luci.netbird` rpcd object — 21 methods (10 read + 11 write). |
+| Backend entry | `root/usr/share/rpcd/ucode/netbird.uc` | The `luci.netbird` rpcd object — 26 methods (12 read + 14 write). |
 | Backend lib | `root/usr/share/rpcd/ucode/lib/*.uc` | `shell`(quote) · `paths`(binary probe) · `envelope`({ok,err,CODE}) · `netbird_cli`(CLI wrap) · `state`(5-state) · `sanitize`(validation). |
 | ACL | `root/usr/share/rpcd/acl.d/luci-app-netbird.json` | read/write method whitelist + UCI scopes. Kept strictly 1:1 with the method table. |
 | Settings pipeline | `root/etc/init.d/netbird-settings` | config-only procd service: renders UCI → `netbird up --flags`. |
@@ -48,10 +48,17 @@ the management URL) are display-only.
 - **Pre-shared key is never logged**: it is not placed in `$@`; it is appended only at exec time,
   and logs/dry-run show a static `--preshared-key ***`.
 
-## Binary source management (versions tab)
+## Versions tab
 
-Three sources, switched by repointing the `/usr/bin/netbird` symlink (the path the upstream
-procd service hard-codes):
+The tab manages two different update planes and keeps them separate:
+
+1. **NetBird client binary source** — switched by repointing the `/usr/bin/netbird` symlink (the
+   path the upstream procd service hard-codes).
+2. **The LuCI app package itself** — checked and upgraded from this project's signed package feed.
+
+### NetBird binary source management
+
+Three sources:
 
 | Source | Active form | Provenance & validation |
 |---|---|---|
@@ -78,6 +85,29 @@ arch-agnostic** (the distro serves the right binary; validated against the host'
 e_machine via `_native_emachine`, so it works on mips/riscv/etc.), while the **GitHub
 auto-pick** stays at netbird's unambiguous release arches (amd64/arm64/386/armv6 — mips float ABI
 can't be inferred from `uname -m`). Custom-URL is relaxed to any arch (host-ELF validated).
+
+### luci-app-netbird package self-update
+
+The current `luci-app-netbird` version row has its own "check for updates" action. It does **not**
+touch the NetBird daemon or `/usr/bin/netbird`; it upgrades this LuCI package and its i18n package.
+
+Backend methods:
+
+- `check_luci_app_update` (read) — reads the package index and reports latest/local versions.
+- `update_luci_app` (write) — re-checks, downloads the package files into `/tmp/nb-luci-update*`,
+  installs them, and cleans the temporary directory on success or failure.
+
+Feed selection is by OpenWrt release series:
+
+| OpenWrt series | Package manager | Feed | Package filename |
+|---|---|---|---|
+| 24.10 | `opkg` | `https://luci-app-netbird.okk.sh/openwrt-24.10/all/netbird/` | `luci-app-netbird_<ver>_all.ipk` |
+| 25.12 | `apk` | `https://luci-app-netbird.okk.sh/openwrt-25.12/all/netbird/` | `luci-app-netbird-<ver>.apk` |
+
+Both the main package and `luci-i18n-netbird-zh-cn` are installed together. If either download fails
+or is incomplete, the update is rejected and temporary files are removed; the UI keeps the user on
+the current version and shows the error. When there is no newer version, `update_luci_app` returns
+`invalid_input` and does not create an install workdir.
 
 ## State machine
 
@@ -116,7 +146,7 @@ self-heal, so a router managed over the mesh could hard-lock. Instead:
 
 - **ucode modules** load via `loadfile()` IIFE (the runtime build does not support `export`), and
   **do not hoist function declarations** — a helper must be defined textually before its callers.
-- **ACL ↔ method table** must stay strictly 1:1 (10 read + 11 write = 21).
+- **ACL ↔ method table** must stay strictly 1:1 (12 read + 14 write = 26).
 - **DOM** is built with `E()` only (XSS).
 - **Binary/state paths** are probed at runtime, never hard-coded.
 - Identity is protected on two axes: `conffiles` (opkg upgrades) and `sysupgrade.conf`
