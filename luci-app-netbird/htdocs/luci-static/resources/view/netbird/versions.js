@@ -27,6 +27,14 @@ var callLuciAppUpdate = rpc.declare({ object: 'luci.netbird', method: 'update_lu
 
 function fmtVer(v) { return (v && v.length) ? ('v' + v) : null; }
 
+function pkgMgrName(d) {
+	return (d && d.pkg_mgr === 'apk') ? 'apk' : 'opkg';
+}
+
+function pkgFetchCommand(d) {
+	return (pkgMgrName(d) === 'apk') ? 'apk fetch' : 'opkg download';
+}
+
 function srcLabel(src) {
 	if (src === 'release') return 'NetBird-Release';
 	if (src === 'opkg')    return 'NetBird-OpenWrt';
@@ -55,7 +63,7 @@ return view.extend({
 		var container = E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('NetBird') + ' — ' + _('Versions')),
 			E('div', { 'class': 'cbi-map-descr' },
-				_('The opkg package is the fallback baseline; the latest official build has more complete features.'))
+				_('The %s package is the fallback baseline; the latest official build has more complete features.').format(pkgMgrName(self._bin)))
 		]);
 
 		// ── 当前状态块 ───────────────────────────────────────────────────────
@@ -356,6 +364,8 @@ return view.extend({
 
 	renderDetail: function () {
 		var self = this, d = self._bin || {}, sel = self._sel;
+		var pkgMgr = pkgMgrName(d);
+		var fetchCmd = pkgFetchCommand(d);
 		var rows = [];
 
 		if (sel === 'release') {
@@ -378,15 +388,15 @@ return view.extend({
 		else if (sel === 'opkg') {
 			var op = d.opkg || {};
 			rows.push(E('p', { 'class': 'cbi-section-descr' }, _('This is the OpenWrt package-repository build.')));
-			rows.push(nb.pair(_('Version'), op.version ? (fmtVer(op.version) || '-') : _('Not installed / not in opkg database')));
+			rows.push(nb.pair(_('Version'), op.version ? (fmtVer(op.version) || '-') : _('Not installed / not in %s database').format(pkgMgr)));
 			rows.push(nb.pair(_('Path'), op.path || '/usr/bin/netbird'));
 			// 提示:无副本但 feed 可用 → 切换时自动获取;feed 也无 → 红字
 			if (!op.copy_preserved && op.binary_available)
 				rows.push(E('p', { 'class': 'cbi-section-descr' },
-					_('No local opkg binary copy is kept; switching will fetch it from the opkg feed automatically (opkg download).')));
+					_('No local %s binary copy is kept; switching will fetch it from the %s feed automatically (%s).').format(pkgMgr, pkgMgr, fetchCmd)));
 			else if (!op.binary_available)
 				rows.push(E('p', { 'class': 'cbi-section-descr', 'style': 'color:#a00' },
-					_('The opkg feed does not provide netbird on this device, so switching is unavailable. Check your package sources.')));
+					_('The %s feed does not provide netbird on this device, so switching is unavailable. Check your package sources.').format(pkgMgr)));
 			self._opkgCheck = E('div', { 'style': 'margin:.5em 0' });
 			rows.push(self._opkgCheck);
 			var acts2 = [
@@ -626,9 +636,10 @@ return view.extend({
 
 	_confirmSwitch: function (source, version) {
 		var self = this;
+		var pkgMgr = pkgMgrName(self._bin || {});
 		var label = (source === 'custom') ? (srcLabel('custom') + ' v' + version) : srcLabel(source);
 		var extra = (source === 'opkg')
-			? E('p', { 'class': 'cbi-section-descr' }, _('If no local copy is kept, it will be fetched from the opkg feed first.'))
+			? E('p', { 'class': 'cbi-section-descr' }, _('If no local copy is kept, it will be fetched from the %s feed first.').format(pkgMgr))
 			: E('span', {});
 		ui.showModal(_('Switch binary source'), [
 			E('p', {}, _('Switch the active NetBird binary to %s? The NetBird service will restart briefly.').format(label)),

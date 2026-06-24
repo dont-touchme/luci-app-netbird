@@ -22,6 +22,12 @@ var callDoUp        = rpc.declare({ object: 'luci.netbird', method: 'do_up',
 	params: [ 'management_url', 'setup_key' ] });
 var callDoDown      = rpc.declare({ object: 'luci.netbird', method: 'do_down' });
 var callDoLogout    = rpc.declare({ object: 'luci.netbird', method: 'do_logout' });
+var callBinaryInfo  = rpc.declare({ object: 'luci.netbird', method: 'get_binary_info',
+	params: [ 'check_remote' ], expect: {} });
+
+function pkgMgrName(pkgMgr) {
+	return (pkgMgr === 'apk') ? 'apk' : 'opkg';
+}
 
 // 横幅视图模型：state 字面量 → { pill, label, hint }。
 // pill 取 dom-helpers.statusPill 白名单（connected/disconnected/error/
@@ -79,20 +85,24 @@ return view.extend({
 		return Promise.all([
 			L.resolveDefault(callGetStatus(), { ok: false }),
 			// 改动 2：get_auth_info 同时给展示用管理 URL（UCI→config.json 回退）与打码 hint。
-			L.resolveDefault(callAuthInfo(), { ok: false })
+			L.resolveDefault(callAuthInfo(), { ok: false }),
+			L.resolveDefault(callBinaryInfo(false), { ok: false })
 		]).then(function (res) {
 			var statusRes = res[0];
 			var authRes = res[1];
+			var binRes = res[2];
 			var state = (statusRes && statusRes.ok && statusRes.data && statusRes.data.status) || 'unknown';
 			var authData = (authRes && authRes.ok && authRes.data) ? authRes.data : {};
+			var binData = (binRes && binRes.ok && binRes.data) ? binRes.data : {};
 			var mgmtUrl = authData.management_url || '';
 			var keyHint = authData.setup_key_hint || '';
+			var pkgMgr = binData.pkg_mgr || '';
 			// 仅 running 态拉 connection info 判 management.connected。
 			if (state === 'running')
 				return L.resolveDefault(callConnInfo(), { ok: false }).then(function (ci) {
-					return { state: state, connInfo: ci, mgmtUrl: mgmtUrl, keyHint: keyHint };
+					return { state: state, connInfo: ci, mgmtUrl: mgmtUrl, keyHint: keyHint, pkgMgr: pkgMgr };
 				});
-			return { state: state, connInfo: null, mgmtUrl: mgmtUrl, keyHint: keyHint };
+			return { state: state, connInfo: null, mgmtUrl: mgmtUrl, keyHint: keyHint, pkgMgr: pkgMgr };
 		});
 	},
 
@@ -272,7 +282,7 @@ return view.extend({
 	},
 
 	// 5 态引导操作区：按 state 给对应 CTA（认证表单/已连接控制独立渲染）。
-	renderGuidance: function (state) {
+	renderGuidance: function (state, pkgMgr) {
 		switch (state) {
 		case 'service_disabled':
 		case 'service_stopped':
@@ -285,7 +295,7 @@ return view.extend({
 			]);
 		case 'not_installed':
 			return E('div', { 'class': 'cbi-section' }, [
-				E('p', {}, _('Install the netbird package (e.g. via opkg), then reload this page.'))
+				E('p', {}, _('Install the netbird package (e.g. via %s), then reload this page.').format(pkgMgrName(pkgMgr)))
 			]);
 		default:
 			return E('div', {});
@@ -296,6 +306,7 @@ return view.extend({
 		var state = data.state || 'unknown';
 		var mgmtUrl = data.mgmtUrl || '';
 		var keyHint = data.keyHint || '';
+		var pkgMgr = data.pkgMgr || '';
 		var connected = !!(data.connInfo && data.connInfo.ok && data.connInfo.data &&
 			data.connInfo.data.management && data.connInfo.data.management.connected);
 		var m = bannerModel(state, connected);
@@ -308,7 +319,7 @@ return view.extend({
 					E('span', { 'class': 'nb-banner-hint' }, ' ' + m.hint)
 				])
 			]),
-			this.renderGuidance(state)
+			this.renderGuidance(state, pkgMgr)
 		];
 
 		// connected 时显示断开/注销控制；否则（且非 not_installed）显示认证表单。

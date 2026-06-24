@@ -6,7 +6,8 @@
 
 **English** | [简体中文](README.zh-cn.md)
 
-LuCI app for the [NetBird](https://netbird.io) mesh-VPN client on OpenWrt / ImmortalWrt — manage NetBird on OpenWrt from the router, no command line.
+LuCI app for the [NetBird](https://netbird.io) mesh-VPN client on OpenWrt / ImmortalWrt — manage NetBird on OpenWrt from the router, no command line needed.
+Compatible with OpenWrt / ImmortalWrt 24.x (`opkg`) and 25.x (`apk`).
 
 ## Features
 

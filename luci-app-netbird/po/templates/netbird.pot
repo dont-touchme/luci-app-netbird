@@ -482,7 +482,7 @@ msgid "IPv6"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/versions.js:342
-msgid "If no local copy is kept, it will be fetched from the opkg feed first."
+msgid "If no local copy is kept, it will be fetched from the %s feed first."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/versions.js:214
@@ -500,7 +500,7 @@ msgid "Insecure download"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/overview.js:288
-msgid "Install the netbird package (e.g. via opkg), then reload this page."
+msgid "Install the netbird package (e.g. via %s), then reload this page."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/settings.js:109
@@ -739,8 +739,8 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/versions.js:170
 msgid ""
-"No local opkg binary copy is kept; switching will fetch it from the opkg "
-"feed automatically (opkg download)."
+"No local %s binary copy is kept; switching will fetch it from the %s feed "
+"automatically (%s)."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/logs.js:199
@@ -771,7 +771,7 @@ msgid "Not installed"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/versions.js:165
-msgid "Not installed / not in opkg database"
+msgid "Not installed / not in %s database"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/setup.js:43
@@ -1085,13 +1085,13 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/versions.js:173
 msgid ""
-"The opkg feed does not provide netbird on this device, so switching is "
+"The %s feed does not provide netbird on this device, so switching is "
 "unavailable. Check your package sources."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/netbird/versions.js:53
 msgid ""
-"The opkg package is the fallback baseline; the latest official build has "
+"The %s package is the fallback baseline; the latest official build has "
 "more complete features."
 msgstr ""
 
