@@ -1349,3 +1349,48 @@ msgstr ""
 
 msgid "Could not start the download worker."
 msgstr ""
+
+msgid "Update luci-app-netbird"
+msgstr ""
+
+msgid "luci-app-netbird update available: v%s"
+msgstr ""
+
+msgid "luci-app-netbird is already up to date (v%s)."
+msgstr ""
+
+msgid "Update luci-app-netbird from v%s to v%s?"
+msgstr ""
+
+msgid "Packages will be downloaded from %s. The page may need to be reloaded after installation."
+msgstr ""
+
+msgid "Updating luci-app-netbird"
+msgstr ""
+
+msgid "Downloading and installing luci-app-netbird packages…"
+msgstr ""
+
+msgid "luci-app-netbird updated to v%s. Reload this page to use the new UI."
+msgstr ""
+
+msgid "luci-app-netbird update failed: %s"
+msgstr ""
+
+msgid "unknown error"
+msgstr ""
+
+msgid "Could not fetch luci-app-netbird package index."
+msgstr ""
+
+msgid "Could not parse luci-app-netbird package index."
+msgstr ""
+
+msgid "The package index does not contain a valid luci-app-netbird version."
+msgstr ""
+
+msgid "luci-app-netbird is already up to date."
+msgstr ""
+
+msgid "Could not determine luci-app-netbird package filename."
+msgstr ""

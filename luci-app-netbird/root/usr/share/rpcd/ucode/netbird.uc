@@ -3,7 +3,7 @@
 // Canonical runtime path: /usr/share/rpcd/ucode/netbird.uc
 // Repo canonical source:  root/usr/share/rpcd/ucode/netbird.uc
 //
-// netbird.uc — rpcd 入口对象（注册 luci.netbird，24 methods = 11 read + 13 write）
+// netbird.uc — rpcd 入口对象（注册 luci.netbird，26 methods = 12 read + 14 write）
 // ACL 合约源：root/usr/share/rpcd/acl.d/luci-app-netbird.json
 // 方法名必须与 ACL 一字不差（双向 diff 是 CI 闸门）。
 //
@@ -969,6 +969,8 @@ function _latest_version() {
 
 // _semver_re — 版本号严格白名单（拼 URL/文件名前校验，杜绝注入）。
 const _SEMVER_RE = /^[0-9]+\.[0-9]+\.[0-9]+$/;
+// _pkgver_re — luci-app-netbird 包版本白名单，形如 0.1.0-r2。
+const _PKGVER_RE = /^[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+$/;
 // _arch_re — netbird 发布架构白名单。
 const _ARCH_RE = /^(amd64|arm64|386|armv6)$/;
 
@@ -1264,6 +1266,175 @@ function _uci_binary(field, dflt) {
 // 否则 opkg(≤24.10)。来源用户态值/常量仍叫 "opkg"(语义=「系统软件源」),命令由本函数分流。
 function _pkg_mgr() {
     return access('/usr/bin/apk', 'x') ? 'apk' : 'opkg';
+}
+
+const _NB_LUCI_FEED_ROOT = 'https://luci-app-netbird.okk.sh';
+
+function _openwrt_release_string() {
+    let fd = open('/etc/openwrt_release', 'r');
+    if (fd == null)
+        return '';
+    let raw = fd.read('all') || '';
+    fd.close();
+    let m = match(raw, /DISTRIB_RELEASE=['"]?([^'"\n]+)/);
+    return m ? m[1] : '';
+}
+
+function _openwrt_series() {
+    let rel = _openwrt_release_string();
+    if (match(rel, /^24\.10(\.|$)/))
+        return '24.10';
+    if (match(rel, /^25\.12(\.|$)/))
+        return '25.12';
+    if (length(rel) == 0)
+        return _pkg_mgr() == 'apk' ? '25.12' : '24.10';
+    return '';
+}
+
+function _luci_feed_spec() {
+    let series = _openwrt_series();
+    if (series == '24.10')
+        return { ok: true, series: series, feed_url: _NB_LUCI_FEED_ROOT + '/openwrt-24.10/all/netbird/', pkg_ext: 'ipk' };
+    if (series == '25.12')
+        return { ok: true, series: series, feed_url: _NB_LUCI_FEED_ROOT + '/openwrt-25.12/all/netbird/', pkg_ext: 'apk' };
+    return { ok: false, series: '', feed_url: '', pkg_ext: '', message: 'Unsupported OpenWrt release: ' + (_openwrt_release_string() || 'unknown') };
+}
+
+function _pkgver_parts(v) {
+    let m = match(v || '', /^([0-9]+)\.([0-9]+)\.([0-9]+)-r([0-9]+)$/);
+    if (!m)
+        return [];
+    return [ int(m[1]), int(m[2]), int(m[3]), int(m[4]) ];
+}
+
+function _pkgver_cmp(a, b) {
+    let aa = _pkgver_parts(a);
+    let bb = _pkgver_parts(b);
+    if (length(aa) != 4 || length(bb) != 4)
+        return (a == b) ? 0 : (length(a || '') == 0 ? -1 : 0);
+    for (let i = 0; i < 4; i++) {
+        if (aa[i] < bb[i])
+            return -1;
+        if (aa[i] > bb[i])
+            return 1;
+    }
+    return 0;
+}
+
+function _luci_pkg_filename(pkg, ver, ext) {
+    if (!match(ver || '', _PKGVER_RE))
+        return '';
+    if (ext == 'ipk')
+        return pkg + '_' + ver + '_all.ipk';
+    if (ext == 'apk')
+        return pkg + '-' + ver + '.apk';
+    return '';
+}
+
+function _luci_app_update_info() {
+    let spec = _luci_feed_spec();
+    let local = get_opkg_versions().luci_app_netbird || '';
+    let base = {
+        local_version: local,
+        latest_version: '',
+        update_available: false,
+        series: spec.series || '',
+        feed_url: spec.feed_url || '',
+        pkg_ext: spec.pkg_ext || '',
+        main_package: '',
+        i18n_package: '',
+        pkg_mgr: _pkg_mgr()
+    };
+    if (!spec.ok)
+        return { ok: false, code: CODE.INVALID_INPUT, message: spec.message, data: base };
+
+    let r = _popen_simple(_dl_cmd(spec.feed_url + 'index.json', '', 20));
+    if (r.code != 0 || length(r.out) == 0)
+        return { ok: false, code: CODE.DOWNLOAD_FAILED, message: 'Could not fetch luci-app-netbird package index.', data: base };
+
+    let idx;
+    try {
+        idx = json(r.out);
+    } catch (e) {
+        return { ok: false, code: CODE.PARSE_ERROR, message: 'Could not parse luci-app-netbird package index.', data: base };
+    }
+    let pkgs = (idx != null && idx.packages != null) ? idx.packages : {};
+    let latest = pkgs['luci-app-netbird'] || '';
+    let i18n = pkgs['luci-i18n-netbird-zh-cn'] || latest;
+    if (!match(latest, _PKGVER_RE))
+        return { ok: false, code: CODE.PARSE_ERROR, message: 'The package index does not contain a valid luci-app-netbird version.', data: base };
+
+    base.latest_version = latest;
+    base.update_available = (_pkgver_cmp(local, latest) < 0);
+    base.main_package = _luci_pkg_filename('luci-app-netbird', latest, spec.pkg_ext);
+    base.i18n_package = match(i18n || '', _PKGVER_RE) ? _luci_pkg_filename('luci-i18n-netbird-zh-cn', i18n, spec.pkg_ext) : '';
+    return { ok: true, data: base };
+}
+
+function _do_check_luci_app_update(req) {
+    let info = _luci_app_update_info();
+    if (info.ok)
+        return ok(info.data);
+    return err(info.code, info.message);
+}
+
+function _do_update_luci_app(req) {
+    let info = _luci_app_update_info();
+    if (!info.ok)
+        return err(info.code, info.message);
+    let d = info.data;
+    if (!d.update_available)
+        return err(CODE.INVALID_INPUT, 'luci-app-netbird is already up to date.');
+    if (length(d.main_package) == 0)
+        return err(CODE.PARSE_ERROR, 'Could not determine luci-app-netbird package filename.');
+
+    let mk = _popen_simple('mktemp -d /tmp/nb-luci-update.XXXXXX 2>/dev/null');
+    let work = trim(mk.out);
+    if (mk.code != 0 || length(work) == 0)
+        work = '/tmp/nb-luci-update';
+    _popen_simple('rm -rf ' + shell_quote(work) + ' 2>/dev/null && mkdir -p ' + shell_quote(work));
+
+    let cleanup = function() { _popen_simple('rm -rf ' + shell_quote(work) + ' 2>/dev/null'); };
+    let main_path = work + '/' + d.main_package;
+    let main_dl = _popen_simple(_dl_cmd(d.feed_url + d.main_package, main_path, 120));
+    if (main_dl.code != 0 || _file_size_kb(main_path) < 1) {
+        cleanup();
+        return err(CODE.DOWNLOAD_FAILED, 'Failed to download luci-app-netbird package: ' + substr(trim(main_dl.out), 0, 200));
+    }
+
+    let paths = [ main_path ];
+    if (length(d.i18n_package) > 0) {
+        let i18n_path = work + '/' + d.i18n_package;
+        let i18n_dl = _popen_simple(_dl_cmd(d.feed_url + d.i18n_package, i18n_path, 120));
+        if (i18n_dl.code != 0 || _file_size_kb(i18n_path) < 1) {
+            cleanup();
+            return err(CODE.DOWNLOAD_FAILED, 'Failed to download luci-app-netbird translation package: ' + substr(trim(i18n_dl.out), 0, 200));
+        }
+        push(paths, i18n_path);
+    }
+
+    let args = '';
+    for (let p in paths)
+        args += ' ' + shell_quote(p);
+    let cmd;
+    if (d.pkg_mgr == 'apk')
+        cmd = 'apk add --allow-untrusted --upgrade' + args + ' 2>&1';
+    else
+        cmd = 'opkg install' + args + ' 2>&1';
+
+    let inst = _popen_simple(cmd);
+    cleanup();
+    if (inst.code != 0)
+        return err(CODE.INSTALL_FAILED, 'Failed to install luci-app-netbird package: ' + substr(trim(inst.out), 0, 300));
+
+    let after = get_opkg_versions().luci_app_netbird || '';
+    return ok({
+        from: d.local_version,
+        to: after || d.latest_version,
+        latest_version: d.latest_version,
+        feed_url: d.feed_url,
+        pkg_mgr: d.pkg_mgr
+    });
 }
 
 // _native_emachine() → 本机原生 ELF e_machine(读常驻原生可执行);全失败返 -1。
@@ -2026,7 +2197,7 @@ function _ensure_configured_binary() {
 
 return {
     'luci.netbird': {
-        // ==== 10 read ====（ACL read.ubus.luci.netbird 对齐）
+        // ==== 12 read ====（ACL read.ubus.luci.netbird 对齐）
 
         // 任何态都 ok:true；data.status 暴露 5 态字面量
         get_status: {
@@ -2221,7 +2392,14 @@ return {
             call: _safe(_do_get_binary_update_progress),
         },
 
-        // ==== 13 write ====（ACL write.ubus.luci.netbird 对齐）— 方案 A 已移除 setup_network
+        // check_luci_app_update — 检测 luci-app-netbird 自身包是否有新版本。
+        // ACL: 方法名已加入 read.ubus.luci.netbird（一字不差）。
+        check_luci_app_update: {
+            args: {},
+            call: _safe(_do_check_luci_app_update),
+        },
+
+        // ==== 14 write ====（ACL write.ubus.luci.netbird 对齐）— 方案 A 已移除 setup_network
 
         // do_up — 连接（拉起 WireGuard + 连管理端 + 建 P2P）。
         // args { management_url, setup_key } 均瞬时（setup_key 绝不入 UCI/backup）。
@@ -2447,5 +2625,8 @@ return {
         // delete_custom_binary — 删非 active 的自定义下载版本(多版本盘面清理)。
         // ACL: 方法名已加入 write.ubus.luci.netbird（一字不差）。
         delete_custom_binary:  { args: { version: '' }, call: _safe(_do_delete_custom_binary) },
+        // update_luci_app — 从 luci-app-netbird.okk.sh 对应 OpenWrt 系列目录下载并安装 LuCI 包。
+        // ACL: 方法名已加入 write.ubus.luci.netbird（一字不差）。
+        update_luci_app:       { args: {}, call: _safe(_do_update_luci_app) },
     },
 };

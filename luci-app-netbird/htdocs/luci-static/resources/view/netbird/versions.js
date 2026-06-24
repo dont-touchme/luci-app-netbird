@@ -22,6 +22,8 @@ var callBinaryProgress = rpc.declare({ object: 'luci.netbird', method: 'get_bina
 var callCancelUpdate = rpc.declare({ object: 'luci.netbird', method: 'cancel_binary_update', params: [], expect: {} });
 var callSetSource    = rpc.declare({ object: 'luci.netbird', method: 'set_binary_source',    params: ['source', 'version'], expect: {} });
 var callDeleteCustom = rpc.declare({ object: 'luci.netbird', method: 'delete_custom_binary', params: ['version'],           expect: {} });
+var callLuciAppCheck = rpc.declare({ object: 'luci.netbird', method: 'check_luci_app_update', params: [], expect: {} });
+var callLuciAppUpdate = rpc.declare({ object: 'luci.netbird', method: 'update_luci_app', params: [], expect: {} });
 
 function fmtVer(v) { return (v && v.length) ? ('v' + v) : null; }
 
@@ -48,6 +50,7 @@ return view.extend({
 		self._bin = (res && res.ok && res.data) ? res.data : {};
 		self._sel = self._bin.active_source || 'release';   // 默认显示当前 active 来源
 		self._relLatest = null;                             // checkUpdate(release) 结果缓存
+		self._luciAppLatest = null;                         // checkLuciAppUpdate 结果缓存
 
 		var container = E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('NetBird') + ' — ' + _('Versions')),
@@ -92,6 +95,29 @@ return view.extend({
 
 	renderStatus: function () {
 		var d = this._bin || {};
+		var lu = this._luciAppLatest || null;
+		var luActs = [
+			E('button', {
+				'class': 'btn cbi-button cbi-button-action',
+				'click': ui.createHandlerFn(this, 'checkLuciAppUpdate')
+			}, _('Check for updates'))
+		];
+		if (lu && lu.update_available)
+			luActs.push(E('button', {
+				'class': 'btn cbi-button cbi-button-positive',
+				'click': ui.createHandlerFn(this, 'confirmLuciAppUpdate')
+			}, _('Update luci-app-netbird')));
+		var luMsg = null;
+		if (lu && lu.checking)
+			luMsg = E('div', { 'class': 'cbi-value-description', 'style': 'color:#888' }, _('Checking…'));
+		else if (lu && lu.error)
+			luMsg = E('div', { 'class': 'cbi-value-description', 'style': 'color:#a00' }, lu.error);
+		else if (lu && lu.latest_version && lu.update_available)
+			luMsg = E('div', { 'class': 'cbi-value-description', 'style': 'color:#080' },
+				_('luci-app-netbird update available: v%s').format(lu.latest_version));
+		else if (lu && lu.latest_version)
+			luMsg = E('div', { 'class': 'cbi-value-description', 'style': 'color:#080' },
+				_('luci-app-netbird is already up to date (v%s).').format(lu.latest_version));
 		var node = E('div', { 'class': 'cbi-section' }, [
 			E('h3', {}, _('Current')),
 			E('div', { 'class': 'nb-conn-info' }, [
@@ -104,10 +130,12 @@ return view.extend({
 				nb.pair(_('Running version'), fmtVer(d.running_version) || '-'),
 				E('div', { 'class': 'nb-pair' }, [
 					E('span', { 'class': 'nb-pair-label' }, _('luci-app-netbird')),
-					E('span', { 'class': 'nb-pair-value' }, [
+					E('div', { 'class': 'nb-pair-value nb-pair-value-block' }, [
 						fmtVer(d.luci_app_version) || '-',
 						' ',
-						E('a', { 'href': 'https://github.com/dont-touchme/luci-app-netbird', 'target': '_blank', 'rel': 'noopener noreferrer' }, 'GitHub')
+						E('a', { 'href': 'https://github.com/dont-touchme/luci-app-netbird', 'target': '_blank', 'rel': 'noopener noreferrer' }, 'GitHub'),
+						E('div', { 'class': 'cbi-section-actions', 'style': 'margin-top:.4em' }, this._spaced(luActs)),
+						luMsg || E('span', {})
 					])
 				]),
 				nb.pair(_('Architecture'), d.arch ? (d.arch + (d.uname_m ? (' (' + d.uname_m + ')') : '')) : '-')
@@ -472,6 +500,53 @@ return view.extend({
 					: E('p', { 'style': 'color:#888' }, _('No package upgrade found in the cached package lists.'));
 				if (self._opkgCheck) dom.content(self._opkgCheck, m2);
 			}
+		});
+	},
+
+	checkLuciAppUpdate: function () {
+		var self = this;
+		self._luciAppLatest = { checking: true };
+		self.renderStatus();
+		return L.resolveDefault(callLuciAppCheck(), { ok: false }).then(function (res) {
+			if (res && res.ok && res.data)
+				self._luciAppLatest = res.data;
+			else
+				self._luciAppLatest = { error: (res && res.message) ? _(res.message) : _('Check for updates failed.') };
+			self.renderStatus();
+		});
+	},
+
+	confirmLuciAppUpdate: function () {
+		var self = this;
+		var info = self._luciAppLatest || {};
+		ui.showModal(_('Update luci-app-netbird'), [
+			E('p', {}, _('Update luci-app-netbird from v%s to v%s?').format(info.local_version || '-', info.latest_version || '?')),
+			E('p', { 'class': 'cbi-section-descr' }, _('Packages will be downloaded from %s. The page may need to be reloaded after installation.').format(info.feed_url || '')),
+			E('div', { 'class': 'right' }, [
+				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')), ' ',
+				E('button', { 'class': 'btn cbi-button cbi-button-positive important', 'click': ui.createHandlerFn(self, 'updateLuciApp') }, _('Update luci-app-netbird'))
+			])
+		]);
+	},
+
+	updateLuciApp: function () {
+		var self = this;
+		ui.showModal(_('Updating luci-app-netbird'), [
+			E('p', { 'class': 'spinning' }, _('Downloading and installing luci-app-netbird packages…'))
+		]);
+		return L.resolveDefault(self._withRpcTimeout(180, function () {
+			return callLuciAppUpdate();
+		}), { ok: false }).then(function (res) {
+			ui.hideModal();
+			if (res && res.ok) {
+				ui.addNotification(null, E('p', {}, _('luci-app-netbird updated to v%s. Reload this page to use the new UI.').format((res.data && res.data.to) || '?')), 'info');
+				self._luciAppLatest = null;
+				return self.refresh();
+			}
+			ui.addNotification(null, E('p', {}, _('luci-app-netbird update failed: %s').format((res && res.message) || _('unknown error'))), 'error');
+		}, function (err) {
+			ui.hideModal();
+			ui.addNotification(null, E('p', {}, _('luci-app-netbird update failed: %s').format(err && err.message ? err.message : _('unknown error'))), 'error');
 		});
 	},
 

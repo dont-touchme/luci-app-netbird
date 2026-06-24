@@ -17,6 +17,9 @@
 	flex: 1 1 auto;
 	word-break: break-word;
 }
+.nb-pair-value-block {
+	display: block;
+}
 
 /* 连接状态胶囊。 */
 .nb-pill {

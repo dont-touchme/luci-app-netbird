@@ -965,3 +965,48 @@ msgstr "下载/安装未完成。请检查设备日志后重试。"
 
 msgid "Could not start the download worker."
 msgstr "无法启动下载后台任务。"
+
+msgid "Update luci-app-netbird"
+msgstr "更新 luci-app-netbird"
+
+msgid "luci-app-netbird update available: v%s"
+msgstr "luci-app-netbird 有可用更新：v%s"
+
+msgid "luci-app-netbird is already up to date (v%s)."
+msgstr "luci-app-netbird 已是最新版本（v%s）。"
+
+msgid "Update luci-app-netbird from v%s to v%s?"
+msgstr "将 luci-app-netbird 从 v%s 更新到 v%s？"
+
+msgid "Packages will be downloaded from %s. The page may need to be reloaded after installation."
+msgstr "将从 %s 下载安装包。安装后可能需要重新加载页面。"
+
+msgid "Updating luci-app-netbird"
+msgstr "正在更新 luci-app-netbird"
+
+msgid "Downloading and installing luci-app-netbird packages…"
+msgstr "正在下载并安装 luci-app-netbird 软件包……"
+
+msgid "luci-app-netbird updated to v%s. Reload this page to use the new UI."
+msgstr "luci-app-netbird 已更新到 v%s。请重新加载此页面以使用新版界面。"
+
+msgid "luci-app-netbird update failed: %s"
+msgstr "luci-app-netbird 更新失败：%s"
+
+msgid "unknown error"
+msgstr "未知错误"
+
+msgid "Could not fetch luci-app-netbird package index."
+msgstr "无法获取 luci-app-netbird 软件包索引。"
+
+msgid "Could not parse luci-app-netbird package index."
+msgstr "无法解析 luci-app-netbird 软件包索引。"
+
+msgid "The package index does not contain a valid luci-app-netbird version."
+msgstr "软件包索引中没有合法的 luci-app-netbird 版本。"
+
+msgid "luci-app-netbird is already up to date."
+msgstr "luci-app-netbird 已是最新版本。"
+
+msgid "Could not determine luci-app-netbird package filename."
+msgstr "无法确定 luci-app-netbird 软件包文件名。"
